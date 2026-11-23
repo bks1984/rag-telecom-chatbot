@@ -4,6 +4,8 @@ A self-serve chat assistant that answers Tier-1 telecom questions using only Nov
 resolved tickets and PDF guides. Built to `PRD.md`, plus the escalation and account-data rules
 from the NovaCell PRD.
 
+**Live dashboard:** [NovaCell Support Analytics](https://claude.ai/artifact/J6fdUk1bAMezaXKu6s2Kcx) shows support and refund-agent KPIs, charts and recent conversations, with date and route filters. Its data comes from `export_metrics.py`.
+
 ## Setup (Windows)
 
 ```bash
