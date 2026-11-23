@@ -4,3 +4,4 @@ chroma_store/
 logs/
 __pycache__/
 .claude/
+metrics/

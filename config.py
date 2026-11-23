@@ -53,7 +53,7 @@ def setup_logging() -> None:
     if logger.handlers:
         return
     LOG_DIR.mkdir(exist_ok=True)
-    fmt = logging.Formatter("%(asctime)s %(message)s", "%H:%M:%S")
+    fmt = logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S")
     for handler in (logging.StreamHandler(), logging.FileHandler(AGENT_LOG, encoding="utf-8")):
         handler.setFormatter(fmt)
         logger.addHandler(handler)

@@ -50,6 +50,8 @@ The LLM reads the conversation and works out which amount the customer means. Ap
 
 Conversation context: the last `HISTORY_MESSAGES` messages go to both routes. Retrieval still uses only the current question. If a follow-up ("should I do that before I travel?") scores below the relevance gate on its own, it is answered from the previous answer's sources. **Clear conversation** resets the history and any pending refund. The sidebar's *Demo account* panel switches the simulated user and resets the demo data.
 
+Run `.venv\Scripts\python export_metrics.py` to turn both logs into `metrics/turns.json` and `metrics/agent_events.json`, the data behind the NovaCell Support Analytics dashboard.
+
 Workflow steps (`[Intent] …`, `[Agent] validate_refund(amount=499)`, `[Refund] success …`) are logged to the console and to `logs/agent.log`.
 
 ```bash
