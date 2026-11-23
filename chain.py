@@ -64,6 +64,8 @@ class Turn:
     hits: list[Hit] = field(default_factory=list)
     top_score: float | None = None
     escalated: bool = False
+    intent: str | None = None          # agent_PRD §6.1: requirement_inquiry | refund_request
+    refund: dict | None = None         # refund workflow status for this turn, if any
     turn_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
 
@@ -95,11 +97,19 @@ class SupportBot:
         if route.kind == "human":
             return Turn(question, "human", iter([guardrails.HUMAN_REPLY]), escalated=True)
 
-        hits = self.retriever.retrieve(question)
+        hits = self.retriever.retrieve(question)       # retrieval uses the current question only
         top = hits[0].score if hits else 0.0
+        follow_up = False
         if top < config.MIN_RELEVANCE:
-            return Turn(question, "low_confidence", iter([guardrails.LOW_CONFIDENCE_REPLY]),
-                        hits=[], top_score=top, escalated=True)
+            # A follow-up ("should I do that before I travel?") often scores low on its own.
+            # Ground it in the sources of the answer it follows; otherwise decline as before.
+            prior = _previous_hits(history or [])
+            if not prior:
+                return Turn(question, "low_confidence", iter([guardrails.LOW_CONFIDENCE_REPLY]),
+                            hits=[], top_score=top, escalated=True)
+            seen = {h.ref for h in prior}
+            hits = prior + [h for h in hits if h.ref not in seen]
+            follow_up = True
 
         inputs = {
             "context": format_context(hits),
@@ -108,10 +118,18 @@ class SupportBot:
             "escalation": config.ESCALATION_CONTACT,
             "account_note": ACCOUNT_NOTE if route.account_data else "",
         }
-        turn = Turn(question, "account_data" if route.account_data else "answer",
+        name = "account_data" if route.account_data else ("follow_up" if follow_up else "answer")
+        turn = Turn(question, name,
                     self.chain.stream(inputs), hits=hits, top_score=top,
                     escalated=route.account_data)
         return turn
+
+
+def _previous_hits(history: list[dict]) -> list[Hit]:
+    """Sources of the immediately preceding assistant answer, if it had any."""
+    if history and history[-1]["role"] == "assistant":
+        return list(history[-1].get("hits") or [])
+    return []
 
 
 def log_interaction(turn: Turn, answer: str, latency_s: float, feedback: str | None = None) -> None:
@@ -122,6 +140,8 @@ def log_interaction(turn: Turn, answer: str, latency_s: float, feedback: str | N
         "turn_id": turn.turn_id,
         "question": turn.question,
         "route": turn.route,
+        "intent": turn.intent,
+        "refund_status": turn.refund["status"] if turn.refund else None,
         "escalated": turn.escalated or _mentions_escalation(answer),
         "top_score": None if turn.top_score is None else round(turn.top_score, 3),
         "sources": [h.ref for h in turn.hits],
@@ -145,10 +165,14 @@ def _mentions_escalation(answer: str) -> bool:
     return "611" in answer or "agent" in answer.lower()
 
 
-def run_turn(bot: SupportBot, question: str, history=None) -> tuple[Turn, str]:
-    """Non-streaming helper (CLI/tests): returns the turn and full answer, and logs it."""
+def run_turn(bot, question: str, history=None, refund_state=None) -> tuple[Turn, str]:
+    """Non-streaming helper (CLI/tests): returns the turn and full answer, and logs it.
+    `bot` is a SupportBot (RAG only) or an assistant.Assistant (intent routing + refunds)."""
     start = time.perf_counter()
-    turn = bot.ask(question, history)
+    if refund_state is None:
+        turn = bot.ask(question, history)
+    else:
+        turn = bot.respond(question, history, refund_state)
     answer = "".join(turn.stream)
     log_interaction(turn, answer, time.perf_counter() - start)
     return turn, answer

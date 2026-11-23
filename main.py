@@ -3,13 +3,18 @@ import os
 import sys
 
 import config
-from chain import SupportBot, run_turn
+from assistant import Assistant
+from chain import run_turn
+from refund_agent import RefundState
 
 
 def main() -> None:
     if not os.getenv("GROQ_API_KEY"):
         sys.exit("GROQ_API_KEY is not set. Copy .env.example to .env and add your key.")
-    bot = SupportBot()
+    sys.stdout.reconfigure(encoding="utf-8")       # ₹ on Windows consoles
+    config.setup_logging()
+    bot = Assistant()                              # intent routing: RAG or Refund Agent
+    refund_state = RefundState()
     if not bot.retriever.is_ready():
         sys.exit("Knowledge base is empty. Run: python ingest_all.py")
 
@@ -25,7 +30,7 @@ def main() -> None:
         if question.lower() in {"quit", "exit"}:
             break
         try:
-            turn, answer = run_turn(bot, question, history)
+            turn, answer = run_turn(bot, question, history, refund_state)
         except Exception as exc:
             print(f"\nBot: Sorry, something went wrong ({type(exc).__name__}). "
                   f"Please try again, or {config.ESCALATION_CONTACT}.\n")
@@ -33,9 +38,11 @@ def main() -> None:
         print(f"\nBot: {answer}")
         if turn.hits:
             print("Sources: " + ", ".join(dict.fromkeys(h.ref for h in turn.hits)))
+        if turn.refund and turn.refund["needs_confirmation"]:
+            print("(Reply 'Yes, proceed' to confirm or 'Cancel' to stop.)")
         print()
         history += [{"role": "user", "content": question},
-                    {"role": "assistant", "content": answer}]
+                    {"role": "assistant", "content": answer, "hits": turn.hits}]
     print("Goodbye.")
 
 

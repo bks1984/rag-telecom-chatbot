@@ -35,3 +35,27 @@ MIN_RELEVANCE = float(os.getenv("MIN_RELEVANCE", "0.30"))
 
 # Wording taken from FAQ #25 - keep in sync with the FAQ.
 ESCALATION_CONTACT = "call 611 (free from your mobile) or use live chat in the MyTelecom app (8am-10pm)"
+
+# ---------- Agentic refund capability (agent_PRD.md) ----------
+# FR-15/16: stands in for the user ID an authenticated session would supply.
+DEMO_USER_ID = os.getenv("DEMO_USER_ID", "user_123")
+REFUND_WINDOW_DAYS = 7          # FR-25
+REFUND_APPROVAL_LIMIT = 499     # FR-36/37: above this, refunds go to the Support Team
+AGENT_MAX_STEPS = 4             # cap on LLM tool-calling rounds per refund turn
+HISTORY_MESSAGES = 6            # FR-50: recent messages (3 exchanges) passed as context
+AGENT_LOG = LOG_DIR / "agent.log"
+
+
+def setup_logging() -> None:
+    """Workflow-step log (agent_PRD §12) to the console and logs/agent.log. Safe to call twice."""
+    import logging
+    logger = logging.getLogger("novacell")
+    if logger.handlers:
+        return
+    LOG_DIR.mkdir(exist_ok=True)
+    fmt = logging.Formatter("%(asctime)s %(message)s", "%H:%M:%S")
+    for handler in (logging.StreamHandler(), logging.FileHandler(AGENT_LOG, encoding="utf-8")):
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
